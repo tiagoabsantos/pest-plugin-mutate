@@ -29,14 +29,19 @@ final class MutantArguments
         '--max-batch-size' => true,
         '--max-processes' => true,
         '--no-test-tokens' => false,
+        '--parallel' => false,
         '--passthru-php' => true,
         '--processes' => true,
         '--runner' => true,
+        '--shard' => false,
         '--shard-test-distribution' => true,
         '--shard-test-distribution-seed' => true,
         '--tmp-dir' => true,
         '--verbose' => false,
         '-m' => true,
+        // Pest uses -p as the parallel flag, so it must not swallow the next argument.
+        // ParaTest's own -p is --processes, which Pest spells out as --processes.
+        '-p' => false,
     ];
 
     /**
@@ -45,18 +50,19 @@ final class MutantArguments
      */
     public static function from(array $originalArguments): array
     {
+        $originalArguments = array_values($originalArguments);
         $arguments = [];
-        $dropNextArgument = false;
+        $count = count($originalArguments);
 
-        foreach ($originalArguments as $argument) {
-            if ($dropNextArgument) {
-                $dropNextArgument = false;
-
-                continue;
-            }
+        for ($index = 0; $index < $count; $index++) {
+            $argument = $originalArguments[$index];
 
             // the mutant reuses the coverage the original run already collected
             if (str_starts_with($argument, '--coverage')) {
+                if (self::valueFollows($originalArguments, $index, $argument)) {
+                    $index++;
+                }
+
                 continue;
             }
 
@@ -68,10 +74,40 @@ final class MutantArguments
                 continue;
             }
 
+            if ($name === '--shard') {
+                $next = $originalArguments[$index + 1] ?? null;
+
+                // `--shard 1/2` is the value. `--shard tests/Unit` is not: Pest rejects that form.
+                if (! str_contains($argument, '=') && is_string($next) && preg_match('/^\d+\/\d+$/', $next) === 1) {
+                    $index++;
+                }
+
+                continue;
+            }
+
             // `--processes 2` spends two arguments, and a stray `2` would be read as a path
-            $dropNextArgument = self::PARATEST_ONLY[$name] && ! str_contains($argument, '=');
+            if (self::PARATEST_ONLY[$name] && ! str_contains($argument, '=')) {
+                $index++;
+            }
         }
 
         return $arguments;
+    }
+
+    /**
+     * `--coverage-php /tmp/coverage.php` spends two arguments. `--coverage` itself does not,
+     * and neither does an option that already carries its value after `=`.
+     *
+     * @param  array<int, string>  $originalArguments
+     */
+    private static function valueFollows(array $originalArguments, int $index, string $argument): bool
+    {
+        if ($argument === '--coverage' || str_contains($argument, '=')) {
+            return false;
+        }
+
+        $next = $originalArguments[$index + 1] ?? null;
+
+        return is_string($next) && ! str_starts_with($next, '-');
     }
 }

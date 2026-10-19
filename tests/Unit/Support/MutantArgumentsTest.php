@@ -23,7 +23,17 @@ it('drops the coverage arguments, since the mutant reuses the original coverage'
         'vendor/bin/pest',
         '--coverage-php=/tmp/coverage.php',
         '--coverage',
-    ]))->toBe(['vendor/bin/pest']);
+        'tests/Unit',
+    ]))->toBe(['vendor/bin/pest', 'tests/Unit']);
+});
+
+it('drops the path of a coverage option written as two arguments', function (): void {
+    expect(MutantArguments::from([
+        'vendor/bin/pest',
+        '--coverage-php', '/tmp/coverage.php',
+        '--coverage-text', '--colors=never',
+        'tests/Unit',
+    ]))->toBe(['vendor/bin/pest', '--colors=never', 'tests/Unit']);
 });
 
 it('drops the paratest only options, which phpunit would reject before running a test', function (string $argument): void {
@@ -34,14 +44,18 @@ it('drops the paratest only options, which phpunit would reject before running a
     '--max-batch-size=10',
     '--max-processes=4',
     '--no-test-tokens',
+    '--parallel',
     '--passthru-php=-d pcov.enabled=1',
     '--processes=2',
     '--runner=WrapperRunner',
+    '--shard',
+    '--shard=1/2',
     '--shard-test-distribution=sequential',
     '--shard-test-distribution-seed=0',
     '--tmp-dir=/tmp',
     '--verbose',
     '-m=10',
+    '-p',
 ]);
 
 it('drops the value of a paratest only option written as two arguments', function (): void {
@@ -49,6 +63,7 @@ it('drops the value of a paratest only option written as two arguments', functio
         'vendor/bin/pest',
         '--processes', '2',
         '--passthru-php', '-d pcov.enabled=1',
+        '--shard', '1/4',
         'tests/Unit',
     ]))->toBe(['vendor/bin/pest', 'tests/Unit']);
 });
